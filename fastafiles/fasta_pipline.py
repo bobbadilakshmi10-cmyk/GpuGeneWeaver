@@ -1,168 +1,175 @@
 
-# Import Path to check and handle file paths.
+# Import Path to validate and manage FASTA file paths.
 from pathlib import Path
 
-# Import StringIO to treat a string like a file.
+# Import StringIO to read FASTA text directly from memory.
 from io import StringIO
 
-# Import NumPy to store DNA bases as numerical arrays.
+# Import NumPy for efficient numerical representation of DNA bases.
 import numpy as np
 
-# Import SeqIO from BioPython to read FASTA files.
+# Import SeqIO from BioPython to parse FASTA format files.
 from Bio import SeqIO
 
 
-# Map each DNA base to a numerical value.
+# Dictionary that maps each DNA nucleotide to a numerical value.
+# A, C, G, T represent the four standard DNA bases.
+# N represents an unknown or undetermined DNA base.
 DNA_ENCODING = {
-    "A": 0,    # Adenine
-    "C": 1,    # Cytosine
-    "G": 2,    # Guanine
-    "T": 3,    # Thymine
-    "N": -1,   # Unknown or undetermined DNA base
+    "A": 0,
+    "C": 1,
+    "G": 2,
+    "T": 3,
+    "N": -1,
 }
 
 
-# Function to clean and validate a DNA sequence.
+# --------------------------------------------------
+# FUNCTION 1: CLEAN AND VALIDATE DNA SEQUENCE
+# --------------------------------------------------
 def clean_dna(sequence):
 
-    # Remove whitespace and convert all letters to uppercase.
+    # Remove unnecessary spaces, tabs and newline characters.
+    # Convert lowercase DNA characters into uppercase.
     sequence = "".join(sequence.split()).upper()
 
-    # Find characters that are not valid DNA bases.
+    # Identify DNA characters that are not present in our encoding map.
     invalid = set(sequence) - set(DNA_ENCODING)
 
-    # Raise an error if invalid characters are found.
+    # Raise ValueError if the sequence contains invalid DNA characters.
     if invalid:
         raise ValueError(f"Invalid DNA bases: {sorted(invalid)}")
 
-    # Return the cleaned DNA sequence.
+    # Return the validated and cleaned DNA sequence.
     return sequence
 
 
-# Function to convert DNA letters into numerical values.
+# --------------------------------------------------
+# FUNCTION 2: ENCODE DNA SEQUENCE INTO NUMBERS
+# --------------------------------------------------
 def encode_dna(sequence):
 
-    # Clean and validate the DNA sequence first.
+    # First clean and validate the input DNA sequence.
     sequence = clean_dna(sequence)
 
-    # Convert each DNA base into its corresponding number.
-    # Store the numbers in a NumPy array using 8-bit integers.
+    # Convert each DNA nucleotide into its corresponding numerical value.
+    # NumPy int8 stores the encoded values efficiently using 8-bit integers.
     return np.array(
         [DNA_ENCODING[base] for base in sequence],
         dtype=np.int8,
     )
 
 
-# Function to read a FASTA file and prepare DNA chunks.
-# file_path: path of the FASTA file.
-# chunk_size: maximum number of bases in each chunk.
-# step: number of bases to move before creating the next chunk.
+# --------------------------------------------------
+# FUNCTION 3: READ FASTA FILE AND PREPARE DNA CHUNKS
+# --------------------------------------------------
 def prepare_data(file_path, chunk_size=5, step=1):
 
-    # Check that chunk_size and step are positive.
+    # Validate chunk_size and step to ensure both are positive.
     if chunk_size <= 0 or step <= 0:
         raise ValueError("chunk_size and step must be positive")
 
-    # Convert the file path into a Path object.
+    # Convert the given file path into a Path object.
     path = Path(file_path)
 
-    # Check whether the FASTA file exists.
+    # Verify that the specified FASTA file exists.
     if not path.is_file():
         raise FileNotFoundError(f"FASTA file not found: {path}")
 
-    # Open the FASTA file for reading.
-    # utf-8-sig also handles a possible UTF-8 byte-order mark.
+    # Open the FASTA file using UTF-8 encoding.
+    # utf-8-sig handles files containing a UTF-8 byte-order mark.
     with path.open("r", encoding="utf-8-sig") as file:
 
-        # Remove leading/trailing whitespace and skip blank lines.
+        # Read non-empty lines and remove unnecessary whitespace.
         lines = [
             line.strip()
             for line in file
             if line.strip()
         ]
 
-    # Find the index of the first FASTA header.
-    # A FASTA header starts with the character ">".
-    # Return None if no header is found.
+    # Locate the first FASTA header.
+    # FASTA headers always begin with the '>' symbol.
+    # Return None if no header is available.
     first_header = next(
         (i for i, line in enumerate(lines)
          if line.startswith(">")),
         None,
     )
 
-    # Stop if the file does not contain a FASTA header.
+    # Validate the FASTA structure before parsing.
     if first_header is None:
         raise ValueError(
             "No FASTA header found. Each sequence must start with >."
         )
 
-    # Ignore any accidental text before the first FASTA header.
+    # Remove any unwanted text appearing before the first FASTA header.
     lines = lines[first_header:]
 
-    # Combine the cleaned lines into one text string.
+    # Combine the FASTA lines into a single text string.
     fasta_text = "\n".join(lines) + "\n"
 
-    # Parse the FASTA text using BioPython.
-    # StringIO allows SeqIO to read the text like a file.
-    # list() collects all FASTA records into a list.
+    # Parse the FASTA content using BioPython's SeqIO module.
+    # StringIO makes the in-memory string behave like a file.
+    # list() collects all parsed FASTA records.
     fasta_records = list(
         SeqIO.parse(StringIO(fasta_text), "fasta")
     )
 
-    # Stop if no FASTA records were parsed.
+    # Check whether at least one valid FASTA record was found.
     if not fasta_records:
         raise ValueError("No valid FASTA sequences found.")
 
-    # Create an empty list to store all DNA chunks.
+    # Initialize an empty list to store the processed DNA chunks.
     records = []
 
-    # Process each FASTA record one by one.
+    # Iterate through every FASTA record in the input file.
     for fasta_record in fasta_records:
 
-        # Get the DNA sequence, convert it to a string,
-        # and clean and validate the sequence.
+        # Extract the DNA sequence from the current FASTA record.
+        # Convert it into a string and perform cleaning and validation.
         dna = clean_dna(str(fasta_record.seq))
 
-        # Raise an error if the DNA sequence is empty.
+        # Reject empty DNA sequences to avoid invalid processing.
         if not dna:
             raise ValueError(f"Empty DNA sequence: {fasta_record.id}")
 
-        # Convert the complete DNA sequence into numbers.
+        # Convert the complete DNA sequence into its numerical representation.
         encoded = encode_dna(dna)
 
-        # Calculate the starting index of each chunk.
-        # If DNA is shorter than chunk_size, create one short chunk.
-        # Otherwise, create chunks using the specified step.
+        # Generate starting positions for DNA chunk creation.
+        # If the sequence is shorter than chunk_size, create one short chunk.
+        # Otherwise, generate overlapping chunks based on the given step.
         starts = (
             [0]
             if len(dna) < chunk_size
             else range(0, len(dna) - chunk_size + 1, step)
         )
 
-        # Process each starting index to create a DNA chunk.
+        # Iterate through each starting position to extract DNA chunks.
         for start in starts:
 
-            # Calculate the ending index without exceeding DNA length.
+            # Calculate the ending position without exceeding sequence length.
             end = min(start + chunk_size, len(dna))
 
-            # Store the chunk details in a dictionary.
+            # Store the processed chunk information as a dictionary.
             records.append({
-                # Store the FASTA sequence identifier.
+
+                # Store the unique identifier of the FASTA sequence.
                 "id": fasta_record.id,
 
-                # Convert the zero-based index to a one-based position.
+                # Store the starting position using 1-based indexing.
                 "position": start + 1,
 
-                # Extract the DNA letters for this chunk.
+                # Extract the original DNA nucleotide sequence for this chunk.
                 "sequence": dna[start:end],
 
-                # Extract the corresponding encoded numbers.
-                # copy() creates a separate NumPy array for this chunk.
+                # Extract the corresponding numerical DNA representation.
+                # copy() creates an independent array for each chunk.
                 "encoded": encoded[start:end].copy(),
 
-                # Calculate the number of bases in this chunk.
+                # Store the actual number of DNA bases in this chunk.
                 "length": end - start,
             })
 
-    # Return the list containing all prepared DNA chunks.
+    # Return all processed DNA chunks for further analysis.
     return records
