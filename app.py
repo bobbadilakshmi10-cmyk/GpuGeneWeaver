@@ -29,6 +29,10 @@ from fastafiles.fasta_pipline import clean_dna
 # matches based on the target and allowed mismatches.
 from analysis.scoring import scan_sequences
 
+import inspect
+
+print("SCORING FILE:", inspect.getfile(scan_sequences))
+print("FUNCTION PARAMETERS:", inspect.signature(scan_sequences))
 
 # ============================================================
 # 1. FLASK APPLICATION CONFIGURATION
